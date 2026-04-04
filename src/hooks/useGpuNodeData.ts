@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   useK8sWatchResource,
   K8sResourceCommon,
@@ -225,7 +225,7 @@ export function useGpuNodeData(refreshInterval: number | null = 30000): GpuNodeD
   const [gpuNodes, setGpuNodes] = useState<GpuNodeData[]>([]);
   const [resourceTypeColors, setResourceTypeColors] = useState<Record<string, string>>({});
   const hasLoadedOnce = useRef(false);
-  const processingRef = useRef(false);
+  const initialSyncDone = useRef(false);
 
   // Refs to hold the latest watch data without triggering re-renders
   const nodesRef = useRef<AnyK8s[]>([]);
@@ -261,15 +261,9 @@ export function useGpuNodeData(refreshInterval: number | null = 30000): GpuNodeD
   const allLoaded = nodesLoaded && podsLoaded && (workloadsLoaded || workloadsError);
   const error = nodesError || podsError || null;
 
-  // Track the number of GPU pods — re-process immediately when it changes
-  const gpuPodCount = useMemo(() => {
-    return (pods || []).filter((p: AnyK8s) => getPodGpuCount(p) > 0).length;
-  }, [pods]);
-
-  // Run a single processing pass reading from refs
+  // Run a processing pass. Takes a snapshot of the refs at call time so that
+  // concurrent runs always use the freshest data.
   const runProcess = async () => {
-    if (processingRef.current) return;
-    processingRef.current = true;
     try {
       const result = await processSnapshot(
         nodesRef.current,
@@ -281,37 +275,36 @@ export function useGpuNodeData(refreshInterval: number | null = 30000): GpuNodeD
       hasLoadedOnce.current = true;
     } catch (err) {
       console.error('Error processing GPU node data:', err);
-    } finally {
-      processingRef.current = false;
     }
   };
 
-  // Initial load: process once when all watches are ready
-  useEffect(() => {
-    if (allLoaded && !hasLoadedOnce.current) {
-      runProcess();
-    }
-  }, [allLoaded]);
+  // Initial sync: process on every pod list change until stabilized.
+  // This handles pagination, late watch events, and shows data progressively.
+  const podListLength = (pods || []).length;
 
-  // Re-process when GPU pod count changes (catches late-arriving watch events)
   useEffect(() => {
-    if (hasLoadedOnce.current && allLoaded) {
-      runProcess();
-    }
-  }, [gpuPodCount]);
+    if (!allLoaded || initialSyncDone.current) return;
+    runProcess();
 
-  // Periodic refresh: only trigger on the interval timer
+    // After pod list stabilizes for 3s, mark initial sync complete
+    const timer = setTimeout(() => {
+      initialSyncDone.current = true;
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [allLoaded, podListLength]);
+
+  // Periodic refresh: only after initial sync is done
   useEffect(() => {
-    if (!allLoaded) return;
+    if (!allLoaded || !initialSyncDone.current) return;
     if (refreshInterval === null || refreshInterval <= 0) return;
     const timer = setInterval(runProcess, refreshInterval);
     return () => clearInterval(timer);
-  }, [allLoaded, refreshInterval]);
+  }, [allLoaded, initialSyncDone.current, refreshInterval]);
 
   return {
     nodes: gpuNodes,
     resourceTypeColors,
-    loaded: hasLoadedOnce.current || allLoaded,
+    loaded: hasLoadedOnce.current,
     error: error as Error | null,
   };
 }
