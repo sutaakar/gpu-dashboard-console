@@ -14,7 +14,7 @@ import {
   Flex,
   FlexItem,
 } from '@patternfly/react-core';
-import { GpuNodeData, GpuWorkload } from '../utils/gpu-utils';
+import { GpuNodeData, GpuWorkload, getResourceConsolePath } from '../utils/gpu-utils';
 import './gpu-node-card.css';
 
 /** A renderable item inside a CQ group — either a workload span or a single free slot */
@@ -328,7 +328,17 @@ const GpuNodeCard: React.FC<GpuNodeCardProps> = ({ node, resourceTypeColors }) =
                 </button>
               </div>
               <div className="gpu-detail-name">
-                {selectedItem.workload.resourceName || selectedItem.workload.name}
+                <a
+                  href={getResourceConsolePath(
+                    selectedItem.workload.namespace,
+                    selectedItem.workload.resourceType || 'Pod',
+                    selectedItem.workload.resourceName || selectedItem.workload.name,
+                    selectedItem.workload.resourceApiVersion || 'v1',
+                  )}
+                  className="gpu-detail-link"
+                >
+                  {selectedItem.workload.resourceName || selectedItem.workload.name}
+                </a>
               </div>
               <div className="gpu-detail-row">
                 <span className="gpu-detail-label">Namespace</span>

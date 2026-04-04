@@ -198,9 +198,17 @@
 .gpu-detail-name {
   font-size: 15px;
   font-weight: 700;
-  color: var(--pf-v5-global--Color--100, #151515);
   margin-bottom: 8px;
   word-break: break-all;
+}
+
+.gpu-detail-link {
+  color: var(--pf-v5-global--link--Color, #06c);
+  text-decoration: none;
+}
+
+.gpu-detail-link:hover {
+  text-decoration: underline;
 }
 
 .gpu-detail-row {

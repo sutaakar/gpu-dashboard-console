@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   useK8sWatchResource,
   K8sResourceCommon,
@@ -145,6 +145,7 @@ async function processSnapshot(
 
           let resourceType = 'Pod';
           let resourceName = pod.metadata?.name || '';
+          let resourceApiVersion = 'v1';
           const ownerRefs = pod.metadata?.ownerReferences;
           if (ownerRefs && ownerRefs.length > 0) {
             const topOwner = await getTopLevelOwner(
@@ -153,6 +154,7 @@ async function processSnapshot(
             );
             resourceType = topOwner.kind;
             resourceName = topOwner.name;
+            resourceApiVersion = topOwner.apiVersion;
           }
           allResourceTypes.add(resourceType);
 
@@ -179,6 +181,7 @@ async function processSnapshot(
             podName: pod.metadata?.name || '',
             resourceType,
             resourceName,
+            resourceApiVersion,
             failing: failureReason !== null,
             failureReason,
           });
@@ -258,6 +261,11 @@ export function useGpuNodeData(refreshInterval: number | null = 30000): GpuNodeD
   const allLoaded = nodesLoaded && podsLoaded && (workloadsLoaded || workloadsError);
   const error = nodesError || podsError || null;
 
+  // Track the number of GPU pods — re-process immediately when it changes
+  const gpuPodCount = useMemo(() => {
+    return (pods || []).filter((p: AnyK8s) => getPodGpuCount(p) > 0).length;
+  }, [pods]);
+
   // Run a single processing pass reading from refs
   const runProcess = async () => {
     if (processingRef.current) return;
@@ -284,6 +292,13 @@ export function useGpuNodeData(refreshInterval: number | null = 30000): GpuNodeD
       runProcess();
     }
   }, [allLoaded]);
+
+  // Re-process when GPU pod count changes (catches late-arriving watch events)
+  useEffect(() => {
+    if (hasLoadedOnce.current && allLoaded) {
+      runProcess();
+    }
+  }, [gpuPodCount]);
 
   // Periodic refresh: only trigger on the interval timer
   useEffect(() => {

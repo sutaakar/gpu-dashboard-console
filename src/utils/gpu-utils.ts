@@ -79,6 +79,7 @@ export interface GpuWorkload {
   podName: string;
   resourceType: string;
   resourceName: string;
+  resourceApiVersion: string;
   failing: boolean;
   failureReason: string | null;
 }
@@ -148,17 +149,50 @@ function getModelForOwner(
 }
 
 /** Cache for owner reference lookups */
-const ownerCache = new Map<string, { owner: { kind: string; name: string }; ts: number }>();
+const ownerCache = new Map<string, { owner: { kind: string; name: string; apiVersion: string }; ts: number }>();
 const OWNER_CACHE_TTL = 5 * 60 * 1000;
 
 /**
  * Traverse owner references to find the top-level owner of a pod.
  * Uses k8sGet from the console SDK (authenticated via console proxy).
  */
+/** Build the OCP console URL path for a resource */
+export function getResourceConsolePath(
+  namespace: string,
+  kind: string,
+  name: string,
+  apiVersion: string,
+): string {
+  const KNOWN_PLURALS: Record<string, string> = {
+    Pod: 'pods',
+    Deployment: 'deployments',
+    ReplicaSet: 'replicasets',
+    StatefulSet: 'statefulsets',
+    Job: 'jobs',
+    CronJob: 'cronjobs',
+    DaemonSet: 'daemonsets',
+    Service: 'services',
+  };
+
+  const plural = KNOWN_PLURALS[kind];
+  if (plural) {
+    return `/k8s/ns/${namespace}/${plural}/${name}`;
+  }
+
+  // CRDs: /k8s/ns/{ns}/{group}~{version}~{kind}/{name}
+  if (apiVersion.includes('/')) {
+    const [group, version] = apiVersion.split('/');
+    return `/k8s/ns/${namespace}/${group}~${version}~${kind}/${name}`;
+  }
+
+  // Fallback for core resources not in the map
+  return `/k8s/ns/${namespace}/${kind.toLowerCase()}s/${name}`;
+}
+
 export async function getTopLevelOwner(
   ownerRef: { apiVersion: string; kind: string; name: string },
   namespace: string,
-): Promise<{ kind: string; name: string }> {
+): Promise<{ kind: string; name: string; apiVersion: string }> {
   const cacheKey = `${namespace}/${ownerRef.apiVersion}/${ownerRef.kind}/${ownerRef.name}`;
   const cached = ownerCache.get(cacheKey);
   if (cached && Date.now() - cached.ts < OWNER_CACHE_TTL) {
@@ -192,7 +226,7 @@ export async function getTopLevelOwner(
     }
   }
 
-  const result = { kind: current.kind, name: current.name };
+  const result = { kind: current.kind, name: current.name, apiVersion: current.apiVersion };
   ownerCache.set(cacheKey, { owner: result, ts: Date.now() });
   return result;
 }
