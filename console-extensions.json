@@ -1,0 +1,20 @@
+[
+  {
+    "type": "console.navigation/href",
+    "properties": {
+      "id": "gpu-workload-treemap",
+      "name": "GPU Workloads",
+      "href": "/observe/gpu-workloads",
+      "perspective": "admin",
+      "section": "observe"
+    }
+  },
+  {
+    "type": "console.page/route",
+    "properties": {
+      "exact": true,
+      "path": "/observe/gpu-workloads",
+      "component": { "$codeRef": "GpuNodesPage" }
+    }
+  }
+]
