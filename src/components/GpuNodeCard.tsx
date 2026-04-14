@@ -247,7 +247,12 @@ const GpuNodeCard: React.FC<GpuNodeCardProps> = ({ node, resourceTypeColors }) =
                   borderColor: group.color,
                 }}
               >
-                <span className="gpu-cq-header-label">{group.displayName}</span>
+                <span
+                  className="gpu-cq-header-label"
+                  style={group.type === 'available' ? { color: '#333', textShadow: 'none' } : undefined}
+                >
+                  {group.displayName}
+                </span>
               </div>
 
               {/* Items row */}
@@ -260,7 +265,7 @@ const GpuNodeCard: React.FC<GpuNodeCardProps> = ({ node, resourceTypeColors }) =
                   const isFailing = item.workload?.failing || false;
                   const isSelected = selectedKey === item.key;
                   const bgColor = isFree
-                    ? '#e8eaed'
+                    ? '#c8cdd2'
                     : isFailing
                       ? '#c9190b'
                       : resourceTypeColors[item.workload!.resourceType || 'Unknown'] || '#8b9eea';
